@@ -1,7 +1,7 @@
 Requirements
 ============
 
-sudo zypper in make nasm mtools qemu
+sudo zypper in make nasm mtools qemu gcc
 sudo cp /usr/sbin/mkfs.fat /usr/bin/
 wget https://github.com/open-watcom/open-watcom-v2/releases/download/Current-build/open-watcom-2_0-c-linux-x64
 chmod +x open-watcom-2_0-c-linux-x64
