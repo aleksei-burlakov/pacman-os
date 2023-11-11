@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stdbool.h>
 
 void i686_PIC_Configure(uint8_t offsetPic1, uint8_t offsetPic2);
 void i686_PIC_SendEndOfInterrupt(int irq);
