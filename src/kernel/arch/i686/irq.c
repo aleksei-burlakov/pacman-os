@@ -58,8 +58,8 @@ void i686_IRQ_Initialize()
     // enable interrupts
     i686_EnableInterrupts();
 
-    // g_Driver->Unmask(0);
-    //g_Driver->Unmask(1);
+    g_Driver->Unmask(0);
+    // g_Driver->Unmask(1);
 }
 
 void i686_IRQ_RegisterHandler(int irq, IRQHandler handler)

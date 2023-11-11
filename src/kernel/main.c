@@ -4,6 +4,7 @@
 #include <hal/hal.h>
 #include <arch/i686/irq.h>
 #include <debug.h>
+#include <pacman/engine.h>
 
 extern uint8_t __bss_start;
 extern uint8_t __end;
@@ -27,6 +28,7 @@ void __attribute__((section(".entry"))) start(uint16_t bootDrive)
     log_err("Main", "This is an error msg!");
     log_crit("Main", "This is a critical msg!");
     printf("This is my awsome pacman os\n");
+    StartGame();
     //i686_IRQ_RegisterHandler(0, timer);
 
     //crash_me();
