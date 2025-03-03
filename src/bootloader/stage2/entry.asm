@@ -8,13 +8,25 @@ extern __end
 extern start
 global entry
 
+; Summary
+; 1. Set up real-mode stack.
+; 2. Enable A20 line.
+; 3. Load the GDT.
+; 4. Switch to protected mode by setting CR0.PE = 1.
+; 5. Jump to 32-bit protected mode.
+; 6. Set segment registers.
+; 7. Clear BSS section.
+; 8. Jump to the kernel (start).
+
 entry:
+    ; The cli instruction disables interrupts
+    ; to ensure no unexpected behavior during the mode switch.
     cli
 
-    ; save boot drive
+    ; save boot drive (passed by the BIOS in dl)
     mov [g_BootDrive], dl
 
-    ; setup stack
+    ; Initializes the stack at 0xFFF0 for safe function calls
     mov ax, ds
     mov ss, ax
     mov sp, 0xFFF0
@@ -33,7 +45,7 @@ entry:
     jmp dword 08h:.pmode
 
 .pmode:
-    ; we are now in protected mode!
+    ; we are now in protected mode! (32-bit mode)
     [bits 32]
     
     ; 6 - setup segment registers
@@ -47,21 +59,23 @@ entry:
     sub ecx, edi
     mov al, 0
     cld
-    rep stosb
+    rep stosb               ; memory with 0x00
 
     ; expect boot drive in dl, send it as argument to cstart function
+    ; (jump ro kernel)
     xor edx, edx
     mov dl, [g_BootDrive]
     push edx
-    call start
+    call start              ; main.c --> start(uint16_t bootDrive)
 
+    ; Calls the kernel's start function, passing the boot drive number in dl
     cli
-    hlt
+    hlt                      ; If start returns, the CPU is halted
 
-
+; The A20 line allows access to memory beyond 1MB. If it’s disabled, memory wraps around.
 EnableA20:
-    [bits 16]
-    ; disable keyboard
+    [bits 16]   ; Must run in real mode.
+    ; Disables the keyboard to prevent interference.
     call A20WaitInput
     mov al, KbdControllerDisableKeyboard
     out KbdControllerCommandPort, al
@@ -85,7 +99,7 @@ EnableA20:
     or al, 2                                    ; bit 2 = A20 bit
     out KbdControllerDataPort, al
 
-    ; enable keyboard
+    ; enable keyboard (Enables the A20 line by setting bit 2 in the controller output port.)
     call A20WaitInput
     mov al, KbdControllerEnableKeyboard
     out KbdControllerCommandPort, al

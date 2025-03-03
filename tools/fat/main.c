@@ -3,6 +3,9 @@
 #include "disk.h"
 #include "fat.h"
 
+/* tools/fat is completely IGNORED.
+ * fat.c and disk.c are in both tools/fat and in bootloader/stage2,
+ * but only those in the bootloader/stage2 are used */
 int main(int argc, const char** argv)
 {
     if (argc < 3)

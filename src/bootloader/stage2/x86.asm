@@ -1,3 +1,20 @@
+; Summary: handling disk operations and switching between real mode and protected mode
+; Functions that call BIOS interrupts need real mode, so they:
+; 1. Switch to real mode using x86_EnterRealMode.
+; 2. Execute BIOS interrupt 13h for disk operations.
+; 3. Store results in memory.
+; 4. Switch back to protected mode using x86_EnterProtectedMode.
+
+
+; x86_EnterRealMode: Switches from protected mode (32-bit) to real mode (16-bit).
+; Disables the protected mode bit in CR0.
+; Sets up the segment registers and enables interrupts.
+;
+; Possible problems: Not Fully Resetting All Registers
+; When switching back to real mode, only ds and ss are set to zero.
+; Other segment registers (es, fs, gs) are not reset.
+; Some BIOS calls might rely on a properly initialized es register.
+; Fix: Add mov es, ax to ensure es is reset
 %macro x86_EnterRealMode 0
     [bits 32]
     jmp word 18h:.pmode16         ; 1 - jump to 16-bit protected mode segment
@@ -23,7 +40,9 @@
 
 %endmacro
 
-
+; Switches from real mode (16-bit) to protected mode (32-bit).
+; Sets the protection enable flag in CR0.
+; Performs a far jump to reload segment registers for protected mode.
 %macro x86_EnterProtectedMode 0
     cli
 
@@ -53,7 +72,11 @@
 ;    2 - (out) target segment (e.g. es)
 ;    3 - target 32-bit register to use (e.g. eax)
 ;    4 - target lower 16-bit half of #3 (e.g. ax)
-
+;
+; Potential Register Corruption
+; Problem: This macro modifies %3 (a general-purpose register).
+;   If %3 is a caller-saved register (eax, ecx, etc.), it might corrupt other parts of the code.
+; Fix: Preserve the original value.
 %macro LinearToSegOffset 4
 
     mov %3, %1      ; linear address to eax
@@ -64,7 +87,7 @@
 
 %endmacro
 
-
+; Writes a byte to a specified I/O port using out dx, al
 global x86_outb
 x86_outb:
     [bits 32]
@@ -73,6 +96,7 @@ x86_outb:
     out dx, al
     ret
 
+; Reads a byte from a specified I/O port using in al, dx
 global x86_inb
 x86_inb:
     [bits 32]
@@ -81,7 +105,20 @@ x86_inb:
     in al, dx
     ret
 
+;
+; Disk Operations (via BIOS Interrupt 13h)
+; These functions use BIOS interrupt 13h to interact with the disk drive.
+;
 
+; Retrieves drive parameters (type, cylinders, sectors, heads).
+; Uses int 13h, AH=08h to get drive geometry.
+; Stores results in a buffer.
+;
+; Possibe problems: Incorrect Cylinder Calculation
+; The cylinder number is stored across ch (lower 8 bits) and cl (upper 2 bits).
+; The code extracts bh (upper 2 bits of cl) using:
+; Problem: cl is not masked before shifting
+; If cl has unexpected bits set (beyond 6-7), this might corrupt the value.
 global x86_Disk_GetDriveParams
 x86_Disk_GetDriveParams:
     [bits 32]
@@ -161,6 +198,9 @@ x86_Disk_GetDriveParams:
     ret
 
 
+; Resets the disk drive.
+; Uses int 13h, AH=00h.
+; Returns 1 on success, 0 on failure.
 global x86_Disk_Reset
 x86_Disk_Reset:
     [bits 32]
@@ -192,6 +232,13 @@ x86_Disk_Reset:
     ret
 
 
+; Reads sectors from the disk.
+; Uses int 13h, AH=02h.
+; Takes drive, cylinder, sector, head, count, and buffer address as arguments.
+;
+; Possible problems: No Check for Read Errors
+; Problem: The function assumes int 13h, AH=02h will succeed.
+; Fix: Add error checking using the carry flag (CF):
 global x86_Disk_Read
 x86_Disk_Read:
 
