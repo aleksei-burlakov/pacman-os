@@ -18,6 +18,11 @@
 #define VGA_BLACK_SQUARE        0
 #define VGA_WHITE_SQUARE        255
 
+// BEGIN: copied from i8259.c
+#define PIC1_COMMAND_PORT           0x20
+#define PIC_CMD_END_OF_INTERRUPT    0x20
+// END: copied from i8259.c
+
 #define MODULE  "PACMAN"
 #define IRQ0_PERIOD             11  // trigger timer every 15th tick
 
@@ -65,6 +70,16 @@ int initial_landscape[NUM_ROWS][NUM_COLS] = {
     { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 }
 };
 
+char scancode_to_ascii[] = {
+    0,  27, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b',
+    '\t', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n',
+    0, 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`',
+    0, '\\', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 0,
+    '*', 0, ' ', 0
+};
+
+typedef enum { left=0, right=1, up=2, down=3 } Direction;
+
 int game_window[NUM_ROWS][NUM_COLS];
 int Rand4();
 
@@ -96,6 +111,41 @@ void DrawWindow()
     //DrawActor(ghost8);
     DrawActor(pacman);
 }
+
+void MovePacman(Direction direction)
+{
+    switch(direction) {
+        case left: // right-->left
+            if (game_window[pacman.pos_y][pacman.pos_x-1] != 1) {
+                pacman.last_pos_x = pacman.pos_x;
+                pacman.pos_x--;
+            }
+            break;
+        case right: // left-->right
+            if (game_window[pacman.pos_y][pacman.pos_x+1] != 1) {
+                pacman.last_pos_x = pacman.pos_x;
+                pacman.pos_x++;
+            }
+            break;
+        case up: // down-->up
+            if (game_window[pacman.pos_y-1][pacman.pos_x] != 1) {
+                pacman.last_pos_y = pacman.pos_y;
+                pacman.pos_y--;
+            }
+            break;
+        case down: // up-->down
+            if (game_window[pacman.pos_y+1][pacman.pos_x] != 1) {
+                pacman.last_pos_y = pacman.pos_y;
+                pacman.pos_y++;
+            }
+            break;
+        default:
+            log_err("pacman-kbd", "MOVE PACMAN, DEFAULT direction=%d", direction);
+        break;
+    }
+    DrawWindow();
+}
+
 
 void MoveGhost(struct Actor* ghost)
 {
@@ -219,10 +269,58 @@ void irq0_handler_timer(Registers* regs)
     }
 }
 
+void irq1_handler_keyboard(Registers* regs)
+{
+    static uint8_t last_code = 0;
+    uint8_t scancode = i686_inb(0x60);
+
+    if (scancode == 0xE0) {
+        last_code = 0xE0;  // Mark that an extended key is coming
+        return;
+    }
+
+    if (last_code == 0xE0) {
+        // Handle extended keys (e.g., arrow keys)
+        switch (scancode) {
+            case 0x4B:
+                log_debug("pacman-kbd", "Left Arrow Key Pressed");
+                MovePacman(left);
+                break;
+            case 0x4D:
+                log_debug("pacman-kbd", "Right Arrow Key Pressed");
+                MovePacman(right);
+                break;
+            case 0x48:
+                log_debug("pacman-kbd", "Up Arrow Key Pressed");
+                MovePacman(up);
+                break;
+            case 0x50:
+                log_debug("pacman-kbd", "Down Arrow Key Pressed");
+                MovePacman(down);
+                break;
+            // Handle break codes if needed
+            case 0xCB: log_debug("pacman-kbd", "Left Arrow Key Released"); break;
+            case 0xCD: log_debug("pacman-kbd", "Right Arrow Key Released"); break;
+            case 0xC8: log_debug("pacman-kbd", "Up Arrow Key Released"); break;
+            case 0xD0: log_debug("pacman-kbd", "Down Arrow Key Released"); break;
+            default: log_debug("pacman-kbd", "Unknown Extended Key: 0x%X", scancode); break;
+        }
+        last_code = 0;  // Reset extended key flag
+    } else {
+        log_debug("pacman-kbd", "Regular key pressed: Scan Code = 0x%X, as char('%c')"
+            , scancode, scancode_to_ascii[scancode]);
+    }
+
+
+    i686_outb(PIC1_COMMAND_PORT, PIC_CMD_END_OF_INTERRUPT);
+    i686_iowait(); // optional
+}
+
 void Initialize()
 {
     // 1. Setup the timer
     i686_IRQ_RegisterHandler(0, irq0_handler_timer);
+    i686_IRQ_RegisterHandler(1, irq1_handler_keyboard);
     
     // 2. Initialize ghosts
     for (int y = 0; y < NUM_ROWS; y++) {
