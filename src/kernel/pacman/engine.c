@@ -81,7 +81,9 @@ char scancode_to_ascii[] = {
 typedef enum { left=0, right=1, up=2, down=3 } Direction;
 
 int game_window[NUM_ROWS][NUM_COLS];
-int Rand4();
+Direction RandomDirection();
+
+static int support_rdrand = false;
 
 void DrawActor(struct Actor ghost)
 {
@@ -158,7 +160,7 @@ void MoveGhost(struct Actor* ghost)
     }
     
     // if we can go straight go straight
-    if (ghost->last_pos_y != ghost->pos_y) {
+    /*if (ghost->last_pos_y != ghost->pos_y) {
         if (ghost->last_pos_y < ghost->pos_y) { // up-->down
             if (game_window[ghost->pos_y+1][ghost->pos_x] != 1) {
                 ghost->last_pos_y = ghost->pos_y;
@@ -186,35 +188,35 @@ void MoveGhost(struct Actor* ghost)
                 return;
             }
         }
-    }
+    }*/
     while (false == mooved) {
-        int direction = Rand4(); // 0..3
-        switch(direction) {
-        case 0: // move down
-            if (game_window[ghost->pos_y+1][ghost->pos_x] != 1) {
-                ghost->last_pos_y = ghost->pos_y;
-                ghost->pos_y++;
+        Direction dir = RandomDirection();
+        switch(dir) {
+        case left: // move left
+            if (game_window[ghost->pos_y][ghost->pos_x-1] != 1) {
+                ghost->last_pos_x = ghost->pos_x;
+                ghost->pos_x--;
                 mooved = true;
             }
             break;
-        case 1: // move up
-            if (game_window[ghost->pos_y-1][ghost->pos_x] != 1) {
-                ghost->last_pos_y = ghost->pos_y;
-                ghost->pos_y--;
-                mooved = true;
-            }
-            break;
-        case 2: // move right
+        case right: // move right
             if (game_window[ghost->pos_y][ghost->pos_x+1] != 1) {
                 ghost->last_pos_x = ghost->pos_x;
                 ghost->pos_x++;
                 mooved = true;
             }
             break;
-        case 3: // move left
-            if (game_window[ghost->pos_y][ghost->pos_x-1] != 1) {
-                ghost->last_pos_x = ghost->pos_x;
-                ghost->pos_x--;
+        case up: // move up
+            if (game_window[ghost->pos_y-1][ghost->pos_x] != 1) {
+                ghost->last_pos_y = ghost->pos_y;
+                ghost->pos_y--;
+                mooved = true;
+            }
+            break;
+        case down: // move down
+            if (game_window[ghost->pos_y+1][ghost->pos_x] != 1) {
+                ghost->last_pos_y = ghost->pos_y;
+                ghost->pos_y++;
                 mooved = true;
             }
             break;
@@ -230,22 +232,55 @@ void Wait()
     its_time = false;
 }
 
+bool has_rdrand() {
+    uint32_t eax, ecx;
+    __asm__ volatile ("cpuid" : "=a" (eax), "=c" (ecx) : "a" (1));
+    return (ecx >> 30) & 1;  // Check RDRAND support (bit 30 in ECX)
+}
+
+// rdrand doesn't need a seed
+uint32_t rdrand() {
+    uint32_t val;
+    uint8_t success;
+    __asm__ volatile ("rdrand %0; setc %1" : "=r" (val), "=qm" (success));
+    return success ? val : 0;  // Return 0 if failed
+}
+
+// rdseed is the same as rdrand, but better cryptographic level
+uint32_t rdseed() {
+    uint32_t val;
+    uint8_t success;
+    __asm__ volatile ("rdseed %0; setc %1" : "=r" (val), "=qm" (success));
+    return success ? val : 0;
+}
+
+static uint32_t seed = 0;  // Initialize seed
+
+void seed_rng(void) {
+    uint32_t low, high;
+    __asm__ volatile ("rdtsc" : "=a"(low), "=d"(high));  // Read TSC
+    seed = low ^ high;  // Mix high and low bits
+}
+
+uint32_t xorshift(void) {
+    seed_rng();
+    seed ^= seed << 13;
+    seed ^= seed >> 17;
+    seed ^= seed << 5;
+    return seed;
+}
+
 // Rocket-scince true-random generator between [0 and 3]
-int Rand4()
+Direction RandomDirection()
 {
-    static int round = 0;
-    round++;
-    switch(round) {
-    case 1: return 1;
-    case 2: return 3;
-    case 3: return 0;
-    case 4: return 2;
-    case 5: return 1;
-    case 6: return 0;
-    case 7: return 2;
-    case 8: round = 0;
-        return 3;
+    uint32_t rnd = 0;
+    if (support_rdrand) {
+        rnd = rdrand();
     }
+    else {
+        rnd = xorshift();
+    }
+    return (int)rnd % 4;
 }
 
 void MainLoop()
@@ -321,6 +356,12 @@ void Initialize()
     // 1. Setup the timer
     i686_IRQ_RegisterHandler(0, irq0_handler_timer);
     i686_IRQ_RegisterHandler(1, irq1_handler_keyboard);
+
+    // 2. Check if the CPU has PRNG
+    support_rdrand = has_rdrand();
+    if (!support_rdrand) {
+        log_err("pacman-rnd", "The CPU doesn't provide rdrand/rdseed");
+    }
     
     // 2. Initialize ghosts
     for (int y = 0; y < NUM_ROWS; y++) {
