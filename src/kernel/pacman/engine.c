@@ -283,14 +283,64 @@ Direction RandomDirection()
     return (int)rnd % 4;
 }
 
+
+#define VGA_ADDRESS ((volatile uint8_t*) 0xA0000)
+#define SCREEN_WIDTH 640
+#define SCREEN_HEIGHT 480
+
+// VGA 16-color palette (0-15)
+enum VGA_COLORS {
+    BLACK = 0x0, BLUE = 0x1, GREEN = 0x2, CYAN = 0x3,
+    RED = 0x4, MAGENTA = 0x5, BROWN = 0x6, LIGHT_GRAY = 0x7,
+    DARK_GRAY = 0x8, LIGHT_BLUE = 0x9, LIGHT_GREEN = 0xA, LIGHT_CYAN = 0xB,
+    LIGHT_RED = 0xC, LIGHT_MAGENTA = 0xD, YELLOW = 0xE, WHITE = 0xF
+};
+
+// Function to put a pixel in VGA 640x480 mode (Mode 0x12)
+void put_pixel(int x, int y, uint8_t color) {
+    if (x < 0 || x >= SCREEN_WIDTH || y < 0 || y >= SCREEN_HEIGHT) return;
+
+    // Calculate memory offset: (y * 320) + (x / 2)
+    uint16_t offset = (y * 320) + (x / 2);
+
+    // Read the existing byte from memory
+    uint8_t current_byte = VGA_ADDRESS[offset];
+
+    if (x % 2 == 0) {
+        // Left pixel (high nibble, upper 4 bits)
+        current_byte = (current_byte & 0x0F) | (color << 4);
+    } else {
+        // Right pixel (low nibble, lower 4 bits)
+        current_byte = (current_byte & 0xF0) | (color & 0x0F);
+    }
+
+    // Store the modified byte back into video memory
+    VGA_ADDRESS[offset] = current_byte;
+}
+
 void MainLoop()
 {
-    for (int i = 0; i < 500; i++) {
+    for (int i = 0; i < 3; i++) {
         log_debug("PACMAN", "Ok, we are in the main loop");
         DrawWindow();
         MoveGhost(&ghost5);
         Wait();
     }
+
+    for (int i = 0; i < 20; i++) {
+        put_pixel(100, 50+i, 1);   // Draw white pixel at (100, 50)
+        put_pixel(101, 50+i, 2);   // Draw white pixel at (100, 50)
+        put_pixel(102+i, 51, 3); // Draw red pixel next to it
+        put_pixel(102+i, 52, 4); // Draw red pixel next to it
+        //Wait();
+    }
+
+    put_pixel(100, 50, WHITE);       // White
+    put_pixel(101, 50, LIGHT_RED);   // Red
+    put_pixel(102, 50, GREEN);       // Green
+    put_pixel(103, 50, BLUE);        // Blue
+    put_pixel(104, 50, YELLOW);      // Yellow
+    put_pixel(105, 50, MAGENTA);     // Magenta
 }
 
 void irq0_handler_timer(Registers* regs)

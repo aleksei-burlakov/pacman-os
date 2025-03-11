@@ -36,6 +36,12 @@ entry:
     call EnableA20          ; 2 - Enable A20 gate
     call LoadGDT            ; 3 - Load GDT
 
+    ; ============================
+    ; Enable VGA Mode 0x12 (640x480x16)
+    ; ============================
+    mov ax, 0x0012    ; VGA Mode 0x12 (640x480, 16 colors)
+    int 0x10          ; Call BIOS
+
     ; 4 - set protection enable flag in CR0
     mov eax, cr0
     or al, 1
@@ -52,7 +58,7 @@ entry:
     mov ax, 0x10
     mov ds, ax
     mov ss, ax
-   
+    
     ; clear bss (uninitialized data)
     mov edi, __bss_start
     mov ecx, __end
