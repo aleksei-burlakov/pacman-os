@@ -26,6 +26,167 @@
 #define MODULE  "PACMAN"
 #define IRQ0_PERIOD             11  // trigger timer every 15th tick
 
+#define FB_WIDTH   640
+#define FB_HEIGHT  480
+
+static uint8_t g_framebuffer[FB_WIDTH * FB_HEIGHT];
+
+static inline void fb_put_pixel(int x, int y, uint8_t color)
+{
+    if (x < 0 || x >= FB_WIDTH || y < 0 || y >= FB_HEIGHT) return;
+    g_framebuffer[y * FB_WIDTH + x] = color & 0x0F;  // 4-bit color
+}
+
+#define VGA_MEM ((uint8_t*)0xA0000)
+
+static inline void vga_set_map_mask(uint8_t mask)
+{
+    i686_outb(0x3C4, 0x02);  // Sequencer index 2 = Map Mask
+    i686_outb(0x3C5, mask);
+}
+
+void vga_blit_framebuffer_12h(void)
+{
+    // We treat VRAM plane-per-plane, byte-per-byte.
+    // Each byte in a plane represents 8 pixels horizontally.
+    // 1 byte == 8 pixels. --> we iterate pixelwise.
+    for (int y = 0; y < FB_HEIGHT; ++y) {
+        int fb_row_off = y * FB_WIDTH; // frame buffer offeset
+        int vram_row_off = y * 80;     // 640 / 8 = 80 bytes per scanline
+
+        for (int byte_x = 0; byte_x < 80; ++byte_x) {
+            int fb_x = byte_x * 8;     // 8 pixels per byte
+
+            // Build one byte per plane
+            uint8_t plane_bytes[4] = {0, 0, 0, 0};
+
+            for (int bit = 0; bit < 8; ++bit) {
+                int x = fb_x + bit;
+                if (x >= FB_WIDTH) break;
+
+                uint8_t color = g_framebuffer[fb_row_off + x];
+
+                // For each of the 4 planes, set bit if that color bit is 1
+                for (int plane = 0; plane < 4; ++plane) {
+                    if (color & (1 << plane)) {
+                        plane_bytes[plane] |= (uint8_t)(0x80 >> bit);
+                    }
+                }
+            }
+
+            // Write byte for each plane
+            int vram_off = vram_row_off + byte_x;
+            for (int plane = 0; plane < 4; ++plane) {
+                vga_set_map_mask((uint8_t)(1 << plane));
+                VGA_MEM[vram_off] = plane_bytes[plane];
+            }
+        }
+    }
+}
+
+static void fb_clear(uint8_t color)
+{
+    for (int y = 0; y < FB_HEIGHT; ++y)
+        for (int x = 0; x < FB_WIDTH; ++x)
+            fb_put_pixel(x, y, color);
+}
+
+static void fb_hline(int x0, int x1, int y, uint8_t color)
+{
+    if (y < 0 || y >= FB_HEIGHT) return;
+    if (x0 > x1) { int t = x0; x0 = x1; x1 = t; }
+    if (x1 < 0 || x0 >= FB_WIDTH) return;
+    if (x0 < 0) x0 = 0;
+    if (x1 >= FB_WIDTH) x1 = FB_WIDTH - 1;
+
+    for (int x = x0; x <= x1; ++x)
+        fb_put_pixel(x, y, color);
+}
+
+static void fb_vline(int x, int y0, int y1, uint8_t color)
+{
+    if (x < 0 || x >= FB_WIDTH) return;
+    if (y0 > y1) { int t = y0; y0 = y1; y1 = t; }
+    if (y1 < 0 || y0 >= FB_HEIGHT) return;
+    if (y0 < 0) y0 = 0;
+    if (y1 >= FB_HEIGHT) y1 = FB_HEIGHT - 1;
+
+    for (int y = y0; y <= y1; ++y)
+        fb_put_pixel(x, y, color);
+}
+
+static void fb_rectfill(int x0, int y0, int x1, int y1, uint8_t color)
+{
+    if (x0 > x1) { int t = x0; x0 = x1; x1 = t; }
+    if (y0 > y1) { int t = y0; y0 = y1; y1 = t; }
+
+    if (x1 < 0 || x0 >= FB_WIDTH || y1 < 0 || y0 >= FB_HEIGHT) return;
+
+    if (x0 < 0) x0 = 0;
+    if (y0 < 0) y0 = 0;
+    if (x1 >= FB_WIDTH) x1 = FB_WIDTH - 1;
+    if (y1 >= FB_HEIGHT) y1 = FB_HEIGHT - 1;
+
+    for (int y = y0; y <= y1; ++y)
+        for (int x = x0; x <= x1; ++x)
+            fb_put_pixel(x, y, color);
+}
+
+static void fb_circle(int cx, int cy, int r, uint8_t color)
+{
+    int x = r;
+    int y = 0;
+    int err = 1 - r;
+
+    while (x >= y) {
+        fb_put_pixel(cx + x, cy + y, color);
+        fb_put_pixel(cx + y, cy + x, color);
+        fb_put_pixel(cx - y, cy + x, color);
+        fb_put_pixel(cx - x, cy + y, color);
+        fb_put_pixel(cx - x, cy - y, color);
+        fb_put_pixel(cx - y, cy - x, color);
+        fb_put_pixel(cx + y, cy - x, color);
+        fb_put_pixel(cx + x, cy - y, color);
+
+        y++;
+        if (err < 0) {
+            err += 2*y + 1;
+        } else {
+            x--;
+            err += 2*(y - x + 1);
+        }
+    }
+}
+
+
+void VGA_FullscreenDemo_12h(void)
+{
+    // 1) Background gradient (top to bottom)
+    for (int y = 0; y < FB_HEIGHT; ++y) {
+        uint8_t c = (y * 16) / FB_HEIGHT;   // 0..15
+        for (int x = 0; x < FB_WIDTH; ++x)
+            fb_put_pixel(x, y, c);
+    }
+
+    // 2) Crosshair at center
+    int cx = FB_WIDTH  / 2;
+    int cy = FB_HEIGHT / 2;
+    fb_hline(0, FB_WIDTH - 1, cy, 15);  // white
+    fb_vline(cx, 0, FB_HEIGHT - 1, 15); // white
+
+    // 3) Rectangles in corners
+    fb_rectfill(10, 10, 100, 80, 4);               // red
+    fb_rectfill(FB_WIDTH-100, 10, FB_WIDTH-10, 80, 1);  // blue
+    fb_rectfill(10, FB_HEIGHT-80, 100, FB_HEIGHT-10, 2); // green
+    fb_rectfill(FB_WIDTH-100, FB_HEIGHT-80, FB_WIDTH-10, FB_HEIGHT-10, 14); // yellow
+
+    // 4) Circle in the center
+    fb_circle(cx, cy, 120, 10); // light green
+
+    // Finally: push framebuffer to VRAM
+    vga_blit_framebuffer_12h();
+}
+
 struct Actor {
     int pos_y;
     int pos_x;
@@ -94,7 +255,7 @@ void DrawActor(struct Actor ghost)
 
 void DrawWindow()
 {
-    //vfprintf(VFS_FD_STDOUT, fmt, args);
+    //log_vfprintf(VFS_FD_STDOUT, fmt, args);
     for (int y = 0; y < NUM_ROWS; y++) {
         for (int x = 0; x < NUM_COLS; x++) {
             switch ( game_window[y][x] ) {
@@ -296,30 +457,10 @@ enum VGA_COLORS {
     LIGHT_RED = 0xC, LIGHT_MAGENTA = 0xD, YELLOW = 0xE, WHITE = 0xF
 };
 
-// Function to put a pixel in VGA 640x480 mode (Mode 0x12)
-void put_pixel(int x, int y, uint8_t color) {
-    if (x < 0 || x >= SCREEN_WIDTH || y < 0 || y >= SCREEN_HEIGHT) return;
-
-    // Calculate memory offset: (y * 320) + (x / 2)
-    uint16_t offset = (y * 320) + (x / 2);
-
-    // Read the existing byte from memory
-    uint8_t current_byte = VGA_ADDRESS[offset];
-
-    if (x % 2 == 0) {
-        // Left pixel (high nibble, upper 4 bits)
-        current_byte = (current_byte & 0x0F) | (color << 4);
-    } else {
-        // Right pixel (low nibble, lower 4 bits)
-        current_byte = (current_byte & 0xF0) | (color & 0x0F);
-    }
-
-    // Store the modified byte back into video memory
-    VGA_ADDRESS[offset] = current_byte;
-}
-
 void MainLoop()
 {
+    VGA_FullscreenDemo_12h();
+/*
     for (int i = 0; i < 3; i++) {
         log_debug("PACMAN", "Ok, we are in the main loop");
         DrawWindow();
@@ -341,6 +482,7 @@ void MainLoop()
     put_pixel(103, 50, BLUE);        // Blue
     put_pixel(104, 50, YELLOW);      // Yellow
     put_pixel(105, 50, MAGENTA);     // Magenta
+*/
 }
 
 void irq0_handler_timer(Registers* regs)

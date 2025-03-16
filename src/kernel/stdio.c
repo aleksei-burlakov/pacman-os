@@ -34,7 +34,7 @@ void fputs(const char* str, fd_t file)
 
 const char g_HexChars[] = "0123456789abcdef";
 
-void fprintf_unsigned(fd_t file, unsigned long long number, int radix)
+void log_fprintf_unsigned(fd_t file, unsigned long long number, int radix)
 {
     char buffer[32];
     int pos = 0;
@@ -52,17 +52,17 @@ void fprintf_unsigned(fd_t file, unsigned long long number, int radix)
         fputc(buffer[pos], file);
 }
 
-void fprintf_signed(fd_t file, long long number, int radix)
+void log_fprintf_signed(fd_t file, long long number, int radix)
 {
     if (number < 0)
     {
         fputc('-', file);
-        fprintf_unsigned(file, -number, radix);
+        log_fprintf_unsigned(file, -number, radix);
     }
-    else fprintf_unsigned(file, number, radix);
+    else log_fprintf_unsigned(file, number, radix);
 }
 
-void vfprintf(fd_t file, const char* fmt, va_list args)
+void log_vfprintf(fd_t file, const char* fmt, va_list args)
 {
     int state = PRINTF_STATE_NORMAL;
     int length = PRINTF_LENGTH_DEFAULT;
@@ -156,13 +156,13 @@ void vfprintf(fd_t file, const char* fmt, va_list args)
                         {
                         case PRINTF_LENGTH_SHORT_SHORT:
                         case PRINTF_LENGTH_SHORT:
-                        case PRINTF_LENGTH_DEFAULT:     fprintf_signed(file, va_arg(args, int), radix);
+                        case PRINTF_LENGTH_DEFAULT:     log_fprintf_signed(file, va_arg(args, int), radix);
                                                         break;
 
-                        case PRINTF_LENGTH_LONG:        fprintf_signed(file, va_arg(args, long), radix);
+                        case PRINTF_LENGTH_LONG:        log_fprintf_signed(file, va_arg(args, long), radix);
                                                         break;
 
-                        case PRINTF_LENGTH_LONG_LONG:   fprintf_signed(file, va_arg(args, long long), radix);
+                        case PRINTF_LENGTH_LONG_LONG:   log_fprintf_signed(file, va_arg(args, long long), radix);
                                                         break;
                         }
                     }
@@ -172,13 +172,13 @@ void vfprintf(fd_t file, const char* fmt, va_list args)
                         {
                         case PRINTF_LENGTH_SHORT_SHORT:
                         case PRINTF_LENGTH_SHORT:
-                        case PRINTF_LENGTH_DEFAULT:     fprintf_unsigned(file, va_arg(args, unsigned int), radix);
+                        case PRINTF_LENGTH_DEFAULT:     log_fprintf_unsigned(file, va_arg(args, unsigned int), radix);
                                                         break;
                                                         
-                        case PRINTF_LENGTH_LONG:        fprintf_unsigned(file, va_arg(args, unsigned  long), radix);
+                        case PRINTF_LENGTH_LONG:        log_fprintf_unsigned(file, va_arg(args, unsigned  long), radix);
                                                         break;
 
-                        case PRINTF_LENGTH_LONG_LONG:   fprintf_unsigned(file, va_arg(args, unsigned  long long), radix);
+                        case PRINTF_LENGTH_LONG_LONG:   log_fprintf_unsigned(file, va_arg(args, unsigned  long long), radix);
                                                         break;
                         }
                     }
@@ -197,11 +197,11 @@ void vfprintf(fd_t file, const char* fmt, va_list args)
     }
 }
 
-void fprintf(fd_t file, const char* fmt, ...)
+void log_fprintf(fd_t file, const char* fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
-    vfprintf(file, fmt, args);
+    log_vfprintf(file, fmt, args);
     va_end(args);
 }
 
@@ -232,7 +232,7 @@ void printf(const char* fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
-    vfprintf(VFS_FD_STDOUT, fmt, args);
+    log_vfprintf(VFS_FD_STDOUT, fmt, args);
     va_end(args);
 }
 
@@ -255,7 +255,7 @@ void debugf(const char* fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
-    vfprintf(VFS_FD_DEBUG, fmt, args);
+    log_vfprintf(VFS_FD_DEBUG, fmt, args);
     va_end(args);
 }
 
