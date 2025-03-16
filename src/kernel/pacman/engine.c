@@ -94,7 +94,7 @@ void DrawActor(struct Actor ghost)
 
 void DrawWindow()
 {
-    //vfprintf(VFS_FD_STDOUT, fmt, args);
+    //log_vfprintf(VFS_FD_STDOUT, fmt, args);
     for (int y = 0; y < NUM_ROWS; y++) {
         for (int x = 0; x < NUM_COLS; x++) {
             switch ( game_window[y][x] ) {

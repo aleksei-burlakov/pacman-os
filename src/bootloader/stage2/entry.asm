@@ -39,7 +39,7 @@ entry:
     ; ============================
     ; Enable VGA Mode 0x12 (640x480x16)
     ; ============================
-    mov ax, 0x0012    ; VGA Mode 0x12 (640x480, 16 colors)
+    mov ax, 0x0013    ; VGA Mode 0x12 (640x480, 16 colors)
     int 0x10          ; Call BIOS
 
     ; 4 - set protection enable flag in CR0
