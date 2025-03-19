@@ -6,6 +6,15 @@ Hi, this is my fiendly pacman-os. It's mainly based on two sources
 * https://github.com/YoctoForBeaglebone/pacman4console
 * https://github.com/floooh/pacman.c.git
 
+About OS and hypervisor\_last and how they are booting in the bare-metal
+========================================================================
+
+pacman-os: does boot in the text mode (neither 13h nor 12h) on the bare-metal,
+but the vga\_640\_480 branch doesn't work on the bare-metal
+
+OS: neither VGA (13h) not VESA VBE boot on the bare-metal.
+
+hypervisor\_last: does boot on the bare metal in the VGA (13h).
 
 Requirements for the older versions with the real-mode
 ======================================================
