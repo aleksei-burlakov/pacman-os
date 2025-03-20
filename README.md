@@ -16,20 +16,14 @@ OS: neither VGA (13h) not VESA VBE boot on the bare-metal.
 
 hypervisor\_last: does boot on the bare metal in the VGA (13h).
 
-Requirements for the older versions with the real-mode
-======================================================
 
-'''
+Requirements for the new versions with gcc and w/o i686-elf
+===========================================================
 sudo zypper in make nasm mtools qemu gcc
-sudo cp /usr/sbin/mkfs.fat /usr/bin/
-wget https://github.com/open-watcom/open-watcom-v2/releases/download/Current-build/open-watcom-2_0-c-linux-x64
-chmod +x open-watcom-2_0-c-linux-x64
-./open-watcom-2_0-c-linux-x64  # install wcc, include 16-bit compilers
-'''
+(no need for i686-elf and it's still working on the bare-metal).
 
-
-Requirements for the newer versions with the protected mode (master branch)
-===========================================================================
+Requirements for the old versions with the protected mode and i686-elf
+======================================================================
 
 1) Install
 '''
@@ -102,3 +96,16 @@ zypper ar https://packages.microsoft.com/yumrepos/vscode vscode
 zypper refresh
 zypper install code
 '''
+
+Requirements for the oldest versions with the real-mode
+======================================================
+
+'''
+sudo zypper in make nasm mtools qemu gcc
+sudo cp /usr/sbin/mkfs.fat /usr/bin/
+wget https://github.com/open-watcom/open-watcom-v2/releases/download/Current-build/open-watcom-2_0-c-linux-x64
+chmod +x open-watcom-2_0-c-linux-x64
+./open-watcom-2_0-c-linux-x64  # install wcc, include 16-bit compilers
+'''
+
+

@@ -1,12 +1,8 @@
-include build_scripts/config.mk
-
-TARGET_ASMFLAGS += -f elf
-TARGET_CFLAGS += -ffreestanding -nostdlib
-TARGET_LIBS += -lgcc
-TARGET_CC = i686-elf-gcc
-TARGET_LD = i686-elf-gcc
-BUILD_DIR?=build/
-ASM?=nasm
+ASMFLAGS = -f elf
+TARGET_CFLAGS = -m32 -fno-stack-protector -std=c99 -g -ffreestanding -nostdlib
+BUILD_DIR = build/
+ASM = nasm
+LD = gcc
 
 .PHONY: all floppy_image kernel bootloader clean always
 
@@ -35,47 +31,47 @@ $(BUILD_DIR)/stage1.bin: src/bootloader/stage1/boot.asm
 
 $(BUILD_DIR)/stage2/asm/entry.obj: src/bootloader/stage2/entry.asm
 	@mkdir -p $(@D)
-	@$(TARGET_ASM) $(TARGET_ASMFLAGS) -o $@ $<
+	@$(ASM) $(ASMFLAGS) -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/stage2/asm/x86.obj: src/bootloader/stage2/x86.asm
 	@mkdir -p $(@D)
-	@$(TARGET_ASM) $(TARGET_ASMFLAGS) -o $@ $<
+	@$(ASM) $(ASMFLAGS) -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/stage2/c/ctype.obj: src/bootloader/stage2/ctype.c
 	@mkdir -p $(@D)
-	@$(TARGET_CC) $(TARGET_CFLAGS) -Isrc/bootloader/stage2 -c -o $@ $<
+	$(CC) $(TARGET_CFLAGS) -Isrc/bootloader/stage2 -c -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/stage2/c/disk.obj: src/bootloader/stage2/disk.c
 	@mkdir -p $(@D)
-	@$(TARGET_CC) $(TARGET_CFLAGS) -Isrc/bootloader/stage2 -c -o $@ $<
+	$(CC) $(TARGET_CFLAGS) -Isrc/bootloader/stage2 -c -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/stage2/c/fat.obj: src/bootloader/stage2/fat.c
 	@mkdir -p $(@D)
-	@$(TARGET_CC) $(TARGET_CFLAGS) -Isrc/bootloader/stage2 -c -o $@ $<
+	$(CC) $(TARGET_CFLAGS) -Isrc/bootloader/stage2 -c -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/stage2/c/main.obj: src/bootloader/stage2/main.c
 	@mkdir -p $(@D)
-	@$(TARGET_CC) $(TARGET_CFLAGS) -Isrc/bootloader/stage2 -c -o $@ $<
+	$(CC) $(TARGET_CFLAGS) -Isrc/bootloader/stage2 -c -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/stage2/c/memory.obj: src/bootloader/stage2/memory.c
 	@mkdir -p $(@D)
-	@$(TARGET_CC) $(TARGET_CFLAGS) -Isrc/bootloader/stage2 -c -o $@ $<
+	$(CC) $(TARGET_CFLAGS) -Isrc/bootloader/stage2 -c -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/stage2/c/stdio.obj: src/bootloader/stage2/stdio.c
 	@mkdir -p $(@D)
-	@$(TARGET_CC) $(TARGET_CFLAGS) -Isrc/bootloader/stage2 -c -o $@ $<
+	$(CC) $(TARGET_CFLAGS) -Isrc/bootloader/stage2 -c -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/stage2/c/string.obj: src/bootloader/stage2/string.c
 	@mkdir -p $(@D)
-	@$(TARGET_CC) $(TARGET_CFLAGS) -Isrc/bootloader/stage2 -c -o $@ $<
+	$(CC) $(TARGET_CFLAGS) -Isrc/bootloader/stage2 -c -o $@ $<
 	@echo "--> Compiled: " $<
 
 STAGE2_OBJECTS = $(BUILD_DIR)/stage2/asm/entry.obj $(BUILD_DIR)/stage2/asm/x86.obj\
@@ -84,7 +80,7 @@ STAGE2_OBJECTS = $(BUILD_DIR)/stage2/asm/entry.obj $(BUILD_DIR)/stage2/asm/x86.o
 	$(BUILD_DIR)/stage2/c/string.obj
 
 $(BUILD_DIR)/stage2.bin: $(STAGE2_OBJECTS)
-	@$(TARGET_LD) -T src/bootloader/stage2/linker.ld -nostdlib -Wl,-Map=$(BUILD_DIR)/stage2.map -o $@ $^ $(TARGET_LIBS)
+	@$(LD) -m32 -T src/bootloader/stage2/linker.ld -nostdlib -Wl,-Map=$(BUILD_DIR)/stage2.map -o $@ $^
 	@echo "--> Created  stage2.bin"
 
 #
@@ -92,102 +88,102 @@ $(BUILD_DIR)/stage2.bin: $(STAGE2_OBJECTS)
 #
 $(BUILD_DIR)/kernel/asm/arch/i686/isr.obj: src/kernel/arch/i686/isr.asm
 	@mkdir -p $(@D)
-	@$(TARGET_ASM) $(TARGET_ASMFLAGS) -o $@ $<
+	@$(ASM) $(ASMFLAGS) -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/kernel/asm/arch/i686/io.obj: src/kernel/arch/i686/io.asm
 	@mkdir -p $(@D)
-	@$(TARGET_ASM) $(TARGET_ASMFLAGS) -o $@ $<
+	@$(ASM) $(ASMFLAGS) -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/kernel/asm/arch/i686/idt.obj: src/kernel/arch/i686/idt.asm
 	@mkdir -p $(@D)
-	@$(TARGET_ASM) $(TARGET_ASMFLAGS) -o $@ $<
+	@$(ASM) $(ASMFLAGS) -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/kernel/asm/arch/i686/gdt.obj: src/kernel/arch/i686/gdt.asm
 	@mkdir -p $(@D)
-	@$(TARGET_ASM) $(TARGET_ASMFLAGS) -o $@ $<
+	@$(ASM) $(ASMFLAGS) -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/kernel/c/stdio.obj: src/kernel/stdio.c
 	@mkdir -p $(@D)
-	@$(TARGET_CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
+	$(CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/kernel/c/memory.obj: src/kernel/memory.c
 	@mkdir -p $(@D)
-	@$(TARGET_CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
+	$(CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/kernel/c/main.obj: src/kernel/main.c
 	@mkdir -p $(@D)
-	@$(TARGET_CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
+	$(CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/kernel/c/debug.obj: src/kernel/debug.c
 	@mkdir -p $(@D)
-	@$(TARGET_CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
+	$(CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/kernel/c/pacman/engine.obj: src/kernel/pacman/engine.c
 	@mkdir -p $(@D)
-	@$(TARGET_CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
+	$(CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/kernel/c/hal/vfs.obj: src/kernel/hal/vfs.c
 	@mkdir -p $(@D)
-	@$(TARGET_CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
+	$(CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/kernel/c/hal/hal.obj: src/kernel/hal/hal.c
 	@mkdir -p $(@D)
-	@$(TARGET_CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
+	$(CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/kernel/c/arch/i686/vga_text.obj: src/kernel/arch/i686/vga_text.c
 	@mkdir -p $(@D)
-	@$(TARGET_CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
+	$(CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/kernel/c/arch/i686/isrs_gen.obj: src/kernel/arch/i686/isrs_gen.c
 	@mkdir -p $(@D)
-	@$(TARGET_CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
+	$(CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/kernel/c/arch/i686/isr.obj: src/kernel/arch/i686/isr.c
 	@mkdir -p $(@D)
-	@$(TARGET_CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
+	$(CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/kernel/c/arch/i686/irq.obj: src/kernel/arch/i686/irq.c
 	@mkdir -p $(@D)
-	@$(TARGET_CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
+	$(CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/kernel/c/arch/i686/io.obj: src/kernel/arch/i686/io.c
 	@mkdir -p $(@D)
-	@$(TARGET_CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
+	$(CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/kernel/c/arch/i686/gdt.obj: src/kernel/arch/i686/gdt.c
 	@mkdir -p $(@D)
-	@$(TARGET_CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
+	$(CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/kernel/c/arch/i686/idt.obj: src/kernel/arch/i686/idt.c
 	@mkdir -p $(@D)
-	@$(TARGET_CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
+	$(CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/kernel/c/arch/i686/e9.obj: src/kernel/arch/i686/e9.c
 	@mkdir -p $(@D)
-	@$(TARGET_CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
+	$(CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
 	@echo "--> Compiled: " $<
 
 $(BUILD_DIR)/kernel/c/arch/i686/i8259.obj: src/kernel/arch/i686/i8259.c
 	@mkdir -p $(@D)
-	@$(TARGET_CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
+	$(CC) $(TARGET_CFLAGS) -Isrc/kernel -c -o $@ $<
 	@echo "--> Compiled: " $<
 
 KERNEL_OBJECTS = $(BUILD_DIR)/kernel/asm/arch/i686/isr.obj $(BUILD_DIR)/kernel/asm/arch/i686/io.obj\
@@ -206,7 +202,7 @@ arch/i686/isrs_gen.c src/kernel/arch/i686/isrs_gen.inc:
 	@echo "src/kernel/arch/i686/isrs_gen.inc --> generated"
 
 $(BUILD_DIR)/kernel.bin: $(KERNEL_OBJECTS)
-	@$(TARGET_LD) -T src/kernel/linker.ld -nostdlib -Wl,-Map=$(BUILD_DIR)/kernel.map -o $@ $^ $(TARGET_LIBS)
+	@$(LD) -m32 -T src/kernel/linker.ld -nostdlib -Wl,-Map=$(BUILD_DIR)/kernel.map -o $@ $^
 	@echo "--> Created:  kernel.bin"
 
 #

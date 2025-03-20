@@ -42,8 +42,8 @@ void fprintf_unsigned(fd_t file, unsigned long long number, int radix)
     // convert number to ASCII
     do 
     {
-        unsigned long long rem = number % radix;
-        number /= radix;
+        unsigned long long rem = (unsigned long)number % radix;
+        number = (unsigned long)number / radix; 
         buffer[pos++] = g_HexChars[rem];
     } while (number > 0);
 
