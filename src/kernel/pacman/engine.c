@@ -4,19 +4,30 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define NUM_ROWS                24
+#define NUM_ROWS                29
 #define NUM_COLS                28
-#define VGA_BLACK               0
-#define VGA_BLUE                1
-#define VGA_GREEN               2
-#define VGA_CYAN                3
-#define VGA_RED                 4
-#define VGA_MAGENTA             5
-#define VGA_YELLOW              14
-#define VGA_GREEN_BACKGROUND    VGA_GREEN << 4
-#define VGA_RED_BACKGROUND      VGA_RED << 4
-#define VGA_BLACK_SQUARE        0
-#define VGA_WHITE_SQUARE        255
+// Стандартная 16-цветная палитра VGA (подойдёт и для 12h)
+enum VGA_COLOR {
+    VGA_COL_BLACK        = 0x0,
+    VGA_COL_BLUE         = 0x1,
+    VGA_COL_GREEN        = 0x2,
+    VGA_COL_CYAN         = 0x3,
+    VGA_COL_RED          = 0x4,
+    VGA_COL_MAGENTA      = 0x5,
+    VGA_COL_BROWN        = 0x6,
+    VGA_COL_LIGHT_GRAY   = 0x7,
+    VGA_COL_DARK_GRAY    = 0x8,
+    VGA_COL_LIGHT_BLUE   = 0x9,
+    VGA_COL_LIGHT_GREEN  = 0xA,
+    VGA_COL_LIGHT_CYAN   = 0xB,
+    VGA_COL_LIGHT_RED    = 0xC,
+    VGA_COL_LIGHT_MAGENTA= 0xD,
+    VGA_COL_YELLOW       = 0xE,
+    VGA_COL_WHITE        = 0xF,
+};
+
+#define TILE_W     (FB_WIDTH  / NUM_COLS)   // 640 / 28
+#define TILE_H     (FB_HEIGHT / NUM_ROWS)   // 480 / 29
 
 // BEGIN: copied from i8259.c
 #define PIC1_COMMAND_PORT           0x20
@@ -91,28 +102,51 @@ static void fb_clear(uint8_t color)
             fb_put_pixel(x, y, color);
 }
 
-static void fb_hline(int x0, int x1, int y, uint8_t color)
+static inline void fb_dot(int cx, int cy, uint8_t color)
 {
-    if (y < 0 || y >= FB_HEIGHT) return;
-    if (x0 > x1) { int t = x0; x0 = x1; x1 = t; }
-    if (x1 < 0 || x0 >= FB_WIDTH) return;
-    if (x0 < 0) x0 = 0;
-    if (x1 >= FB_WIDTH) x1 = FB_WIDTH - 1;
+    const int r  = 3;          // радиус "жирной" точки
+    const int r2 = r * r;      // r^2, чтобы не считать sqrt
 
-    for (int x = x0; x <= x1; ++x)
-        fb_put_pixel(x, y, color);
+    for (int dy = -r; dy <= r; ++dy) {
+        for (int dx = -r; dx <= r; ++dx) {
+            // принадлежит ли точка (dx,dy) кругу радиуса r?
+            if (dx*dx + dy*dy <= r2) {
+                fb_put_pixel(cx + dx, cy + dy, color);
+            }
+        }
+    }
 }
 
-static void fb_vline(int x, int y0, int y1, uint8_t color)
+static void fb_line(int x0, int y0, int x1, int y1, uint8_t color)
 {
-    if (x < 0 || x >= FB_WIDTH) return;
-    if (y0 > y1) { int t = y0; y0 = y1; y1 = t; }
-    if (y1 < 0 || y0 >= FB_HEIGHT) return;
-    if (y0 < 0) y0 = 0;
-    if (y1 >= FB_HEIGHT) y1 = FB_HEIGHT - 1;
+    int dx = x1 - x0;
+    int dy = y1 - y0;
 
-    for (int y = y0; y <= y1; ++y)
-        fb_put_pixel(x, y, color);
+    int sx = (dx >= 0) ? 1 : -1;
+    int sy = (dy >= 0) ? 1 : -1;
+
+    dx = (dx >= 0) ? dx : -dx;
+    dy = (dy >= 0) ? dy : -dy;
+
+    int err = dx - dy;
+
+    while (1) {
+        fb_put_pixel(x0, y0, color);
+
+        if (x0 == x1 && y0 == y1)
+            break;
+
+        int e2 = err * 2;
+
+        if (e2 > -dy) {
+            err -= dy;
+            x0 += sx;
+        }
+        if (e2 < dx) {
+            err += dx;
+            y0 += sy;
+        }
+    }
 }
 
 static void fb_rectfill(int x0, int y0, int x1, int y1, uint8_t color)
@@ -158,35 +192,6 @@ static void fb_circle(int cx, int cy, int r, uint8_t color)
     }
 }
 
-
-void VGA_FullscreenDemo_12h(void)
-{
-    // 1) Background gradient (top to bottom)
-    for (int y = 0; y < FB_HEIGHT; ++y) {
-        uint8_t c = (y * 16) / FB_HEIGHT;   // 0..15
-        for (int x = 0; x < FB_WIDTH; ++x)
-            fb_put_pixel(x, y, c);
-    }
-
-    // 2) Crosshair at center
-    int cx = FB_WIDTH  / 2;
-    int cy = FB_HEIGHT / 2;
-    fb_hline(0, FB_WIDTH - 1, cy, 15);  // white
-    fb_vline(cx, 0, FB_HEIGHT - 1, 15); // white
-
-    // 3) Rectangles in corners
-    fb_rectfill(10, 10, 100, 80, 4);               // red
-    fb_rectfill(FB_WIDTH-100, 10, FB_WIDTH-10, 80, 1);  // blue
-    fb_rectfill(10, FB_HEIGHT-80, 100, FB_HEIGHT-10, 2); // green
-    fb_rectfill(FB_WIDTH-100, FB_HEIGHT-80, FB_WIDTH-10, FB_HEIGHT-10, 14); // yellow
-
-    // 4) Circle in the center
-    fb_circle(cx, cy, 120, 10); // light green
-
-    // Finally: push framebuffer to VRAM
-    vga_blit_framebuffer_12h();
-}
-
 struct Actor {
     int pos_y;
     int pos_x;
@@ -204,14 +209,14 @@ int initial_landscape[NUM_ROWS][NUM_COLS] = {
     { 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1 },
     { 1, 2, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 2, 1 },
     { 1, 3, 1, 0, 0, 1, 2, 1, 0, 0, 0, 1, 2, 1, 1, 2, 1, 0, 0, 0, 1, 2, 1, 0, 0, 1, 3, 1 },
-    //{ 1, 2, 1, 0, 0, 1, 2, 1, 0, 0, 0, 1, 2, 1, 1, 2, 1, 0, 0, 0, 1, 2, 1, 0, 0, 1, 2, 1 },
+    { 1, 2, 1, 0, 0, 1, 2, 1, 0, 0, 0, 1, 2, 1, 1, 2, 1, 0, 0, 0, 1, 2, 1, 0, 0, 1, 2, 1 },
     { 1, 2, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 2, 1 },
     { 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1 },
-    //{ 1, 2, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 2, 1 },
+    { 1, 2, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 2, 1 },
     { 1, 2, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 2, 1 },
     { 1, 2, 2, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2, 2, 2, 1 },
     { 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1 },
-    //{ 0, 0, 0, 0, 0, 1, 2, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 2, 1, 0, 0, 0, 0, 0 },
+    { 0, 0, 0, 0, 0, 1, 2, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 2, 1, 0, 0, 0, 0, 0 },
     { 0, 0, 0, 0, 0, 1, 2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 1, 0, 0, 0, 0, 0 },
     { 0, 0, 0, 0, 0, 1, 2, 1, 1, 0, 1, 1, 1, 4, 4, 1, 1, 1, 0, 1, 1, 2, 1, 0, 0, 0, 0, 0 },
     { 1, 1, 1, 1, 1, 1, 2, 1, 1, 0, 1, 0, 0, 0, 6, 5, 0, 1, 0, 0, 0, 2, 1, 1, 1, 1, 1, 1 },
@@ -220,16 +225,17 @@ int initial_landscape[NUM_ROWS][NUM_COLS] = {
     { 0, 0, 0, 0, 0, 1, 2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 1, 0, 0, 0, 0, 0 },
     { 1, 1, 1, 1, 1, 1, 2, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 2, 1, 1, 1, 1, 1, 1 },
     { 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1 },
-    //{ 1, 2, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 2, 1 },
+    { 1, 2, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 2, 1 },
     { 1, 2, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 2, 1 },
     { 1, 3, 2, 2, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 9, 2, 2, 2, 2, 2, 2, 2, 1, 1, 2, 2, 3, 1 },
-    //{ 1, 1, 1, 2, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 2, 1, 1, 1 },
+    { 1, 1, 1, 2, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 2, 1, 1, 1 },
     { 1, 1, 1, 2, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 2, 1, 1, 1 },
     { 1, 2, 2, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2, 2, 2, 1 },
     { 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1 },
     { 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1 },
     { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 }
 };
+
 
 char scancode_to_ascii[] = {
     0,  27, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b',
@@ -259,12 +265,12 @@ void DrawWindow()
     for (int y = 0; y < NUM_ROWS; y++) {
         for (int x = 0; x < NUM_COLS; x++) {
             switch ( game_window[y][x] ) {
-            case 0: VGA_putchr(x, y, ' '); VGA_putcolor(x, y, VGA_BLACK_SQUARE); break; // black path
-            case 1: VGA_putchr(x, y, ' '); VGA_putcolor(x, y, VGA_WHITE_SQUARE); break; // white wall
+            case 0: VGA_putchr(x, y, ' '); VGA_putcolor(x, y, VGA_COL_BLACK); break; // black path
+            case 1: VGA_putchr(x, y, ' '); VGA_putcolor(x, y, VGA_COL_WHITE); break; // white wall
             case 2: VGA_putchr(x, y, '.'); break;
             case 3: VGA_putchr(x, y, '*'); break;
-            case 4: VGA_putchr(x, y, ' '); VGA_putcolor(x, y, VGA_GREEN_BACKGROUND); break; // grean exit
-            default: VGA_putchr(x, y, ' '); VGA_putcolor(x, y, VGA_BLACK_SQUARE); break;
+            case 4: VGA_putchr(x, y, ' '); VGA_putcolor(x, y, VGA_COL_GREEN); break; // grean exit
+            default: VGA_putchr(x, y, ' '); VGA_putcolor(x, y, VGA_COL_BLACK); break;
             }
         }
     }
@@ -274,6 +280,53 @@ void DrawWindow()
     //DrawActor(ghost8);
     DrawActor(pacman);
 }
+
+static void draw_landscape_background(void)
+{
+    for (int y = 0; y < NUM_ROWS; ++y)
+    for (int x = 0; x < NUM_COLS; ++x)
+    {
+        int tile = initial_landscape[y][x];
+
+        int px0 = x * TILE_W;
+        int py0 = y * TILE_H;
+        int px1 = px0 + TILE_W - 1;
+        int py1 = py0 + TILE_H - 1;
+
+        switch (tile)
+        {
+        case 1: // wall
+            fb_rectfill(px0, py0, px1, py1, 1);
+            break;
+
+        case 0: // empty road
+            fb_rectfill(px0, py0, px1, py1, 0);
+            break;
+
+        case 2: // small dot
+            fb_rectfill(px0, py0, px1, py1, 0);
+            fb_dot(px0 + TILE_W/2, py0 + TILE_H/2, 15);
+            break;
+
+        case 3: // big dot
+            fb_rectfill(px0, py0, px1, py1, 0);
+            fb_circle(px0 + TILE_W/2, py0 + TILE_H/2, (TILE_W < TILE_H ? TILE_W : TILE_H)/4, 15);
+            break;
+
+        case 4: // ghost gate
+            fb_rectfill(px0, py0, px1, py1, VGA_COL_GREEN);
+            break;
+
+        case 5: case 6: case 7: case 8: // ghosts spawn
+        case 9:                             // pacman spawn
+            fb_rectfill(px0, py0, px1, py1, 0);
+            break;
+        }
+    }
+
+    vga_blit_framebuffer_12h();
+}
+
 
 void MovePacman(Direction direction)
 {
@@ -449,40 +502,16 @@ Direction RandomDirection()
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 480
 
-// VGA 16-color palette (0-15)
-enum VGA_COLORS {
-    BLACK = 0x0, BLUE = 0x1, GREEN = 0x2, CYAN = 0x3,
-    RED = 0x4, MAGENTA = 0x5, BROWN = 0x6, LIGHT_GRAY = 0x7,
-    DARK_GRAY = 0x8, LIGHT_BLUE = 0x9, LIGHT_GREEN = 0xA, LIGHT_CYAN = 0xB,
-    LIGHT_RED = 0xC, LIGHT_MAGENTA = 0xD, YELLOW = 0xE, WHITE = 0xF
-};
-
 void MainLoop()
 {
-    VGA_FullscreenDemo_12h();
-/*
+    draw_landscape_background();
+
     for (int i = 0; i < 3; i++) {
         log_debug("PACMAN", "Ok, we are in the main loop");
-        DrawWindow();
-        MoveGhost(&ghost5);
+        //DrawWindow();
+        //MoveGhost(&ghost5);
         Wait();
     }
-
-    for (int i = 0; i < 20; i++) {
-        put_pixel(100, 50+i, 1);   // Draw white pixel at (100, 50)
-        put_pixel(101, 50+i, 2);   // Draw white pixel at (100, 50)
-        put_pixel(102+i, 51, 3); // Draw red pixel next to it
-        put_pixel(102+i, 52, 4); // Draw red pixel next to it
-        //Wait();
-    }
-
-    put_pixel(100, 50, WHITE);       // White
-    put_pixel(101, 50, LIGHT_RED);   // Red
-    put_pixel(102, 50, GREEN);       // Green
-    put_pixel(103, 50, BLUE);        // Blue
-    put_pixel(104, 50, YELLOW);      // Yellow
-    put_pixel(105, 50, MAGENTA);     // Magenta
-*/
 }
 
 void irq0_handler_timer(Registers* regs)
@@ -559,11 +588,11 @@ void Initialize()
     for (int y = 0; y < NUM_ROWS; y++) {
         for (int x = 0; x < NUM_COLS; x++) {
             switch ( initial_landscape[y][x] ) {
-            case 5: ghost5.pos_y = y; ghost5.last_pos_y = y; ghost5.pos_x = x; ghost5.last_pos_x = x; ghost5.color = VGA_RED; ghost5.symbol = 'G'; break;
-            case 6: ghost6.pos_y = y; ghost6.last_pos_y = y; ghost6.pos_x = x; ghost6.last_pos_x = x; ghost6.color = VGA_CYAN; ghost6.symbol = 'G'; break;
-            case 7: ghost7.pos_y = y; ghost7.last_pos_y = y; ghost7.pos_x = x; ghost7.last_pos_x = x; ghost7.color = VGA_MAGENTA; ghost7.symbol = 'G'; break;
-            case 8: ghost8.pos_y = y; ghost8.last_pos_y = y; ghost8.pos_x = x; ghost8.last_pos_x = x; ghost8.color = VGA_YELLOW; ghost8.symbol = 'G'; break;
-            case 9: pacman.pos_y = y; pacman.last_pos_y = y; pacman.pos_x = x; pacman.last_pos_x = x; pacman.color = VGA_YELLOW; pacman.symbol = 'C'; break;
+            case 5: ghost5.pos_y = y; ghost5.last_pos_y = y; ghost5.pos_x = x; ghost5.last_pos_x = x; ghost5.color = VGA_COL_RED; ghost5.symbol = 'G'; break;
+            case 6: ghost6.pos_y = y; ghost6.last_pos_y = y; ghost6.pos_x = x; ghost6.last_pos_x = x; ghost6.color = VGA_COL_CYAN; ghost6.symbol = 'G'; break;
+            case 7: ghost7.pos_y = y; ghost7.last_pos_y = y; ghost7.pos_x = x; ghost7.last_pos_x = x; ghost7.color = VGA_COL_MAGENTA; ghost7.symbol = 'G'; break;
+            case 8: ghost8.pos_y = y; ghost8.last_pos_y = y; ghost8.pos_x = x; ghost8.last_pos_x = x; ghost8.color = VGA_COL_YELLOW; ghost8.symbol = 'G'; break;
+            case 9: pacman.pos_y = y; pacman.last_pos_y = y; pacman.pos_x = x; pacman.last_pos_x = x; pacman.color = VGA_COL_YELLOW; pacman.symbol = 'C'; break;
             default: game_window[y][x] = initial_landscape[y][x];
             }
         }
