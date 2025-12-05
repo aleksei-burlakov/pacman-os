@@ -35,7 +35,7 @@ enum VGA_COLOR {
 // END: copied from i8259.c
 
 #define MODULE  "PACMAN"
-#define IRQ0_PERIOD             11  // trigger timer every 15th tick
+#define IRQ0_PERIOD             6  // trigger timer every 16th tick
 
 #define FB_WIDTH   640
 #define FB_HEIGHT  480
@@ -254,6 +254,35 @@ Direction RandomDirection();
 
 static int support_rdrand = false;
 
+static inline void clear_cell(int game_x, int game_y)
+{
+    int px0 = game_x * TILE_W;
+    int py0 = game_y * TILE_H;
+    int px1 = px0 + TILE_W - 1;
+    int py1 = py0 + TILE_H - 1;
+    fb_rectfill(px0, py0, px1, py1, VGA_COL_BLACK);
+}
+
+static inline void dot_cell(int game_x, int game_y, int raduis)
+{
+    clear_cell(game_x, game_y);
+
+    int px0 = game_x * TILE_W;
+    int py0 = game_y * TILE_H;
+    int px1 = px0 + TILE_W - 1;
+    int py1 = py0 + TILE_H - 1;
+    fb_dot(px0 + TILE_W/2, py0 + TILE_H/2, VGA_COL_WHITE, raduis);
+}
+
+static inline void wall_cell(int game_x, int game_y, uint8_t color)
+{
+    int px0 = game_x * TILE_W;
+    int py0 = game_y * TILE_H;
+    int px1 = px0 + TILE_W - 1;
+    int py1 = py0 + TILE_H - 1;
+    fb_rectfill(px0, py0, px1, py1, color);
+}
+
 void DrawGhost(struct Actor ghost)
 {
     // TODO: check collisions
@@ -281,56 +310,88 @@ void DrawGhost(struct Actor ghost)
     }
 }
 
+static volatile bool its_time = false;
+static volatile uint32_t g_tick = 0;
+
+void Wait()
+{
+    while(false == its_time);
+    its_time = false;
+}
+
 void DrawPacman(struct Actor pacman)
 {
+    // 1. Clear the cell with pacman
+    clear_cell(pacman.pos_x, pacman.pos_y);
+
+    // 2. Get the vga tile coordinates based on the game position
     int px0 = pacman.pos_x * TILE_W;
     int py0 = pacman.pos_y * TILE_H;
     int px1 = px0 + TILE_W - 1;
     int py1 = py0 + TILE_H - 1;
 
-    fb_rectfill(px0, py0, px1, py1, VGA_COL_BLACK);
-
+    // 3. Get the vga center and radius of pacman
     int cx = px0 + TILE_W / 2;
     int cy = py0 + TILE_H / 2;
-    int r  = (TILE_W < TILE_H ? TILE_W : TILE_H) / 3;  // Пакман покрупнее, чем обычная точка
+    int r  = (TILE_W < TILE_H ? TILE_W : TILE_H) / 3;
     int r2 = r * r;
 
+    // 4. Get the movement direction from last_pos -> pos
+    int dx_dir = pacman.pos_x - pacman.last_pos_x;
+    int dy_dir = pacman.pos_y - pacman.last_pos_y;
+
+    enum { DIR_RIGHT, DIR_LEFT, DIR_UP, DIR_DOWN } dir = DIR_RIGHT;
+
+    if (dx_dir > 0)      dir = DIR_RIGHT;
+    else if (dx_dir < 0) dir = DIR_LEFT;
+    else if (dy_dir > 0) dir = DIR_DOWN;
+    else if (dy_dir < 0) dir = DIR_UP;
+    
+    // 5. If the pacman is moving at all
+    bool moving = (dx_dir != 0 || dy_dir != 0);
+
+    // 5. If the mouth is open (switch between open/close)
+    bool mouth_open = moving && ((g_tick & 1) != 0);
+
+    // 6. Draw the circle with/without the mouth
     for (int dy = -r; dy <= r; ++dy) {
         for (int dx = -r; dx <= r; ++dx) {
-            if (dx*dx + dy*dy <= r2) {
-                fb_put_pixel(cx + dx, cy + dy, VGA_COL_YELLOW);
+            if (dx*dx + dy*dy > r2)
+                continue;   // вне круга
+
+            if (mouth_open) {
+                bool in_mouth = false;
+
+                switch (dir) {
+                    case DIR_RIGHT:
+                        // вырезаем клин справа
+                        if (dx > 0 && my_abs(dy) < dx)
+                            in_mouth = true;
+                        break;
+                    case DIR_LEFT:
+                        // клин слева
+                        if (dx < 0 && my_abs(dy) < -dx)
+                            in_mouth = true;
+                        break;
+                    case DIR_UP:
+                        // клин вверх
+                        if (dy < 0 && my_abs(dx) < -dy)
+                            in_mouth = true;
+                        break;
+                    case DIR_DOWN:
+                        // клин вниз
+                        if (dy > 0 && my_abs(dx) < dy)
+                            in_mouth = true;
+                        break;
+                }
+
+                if (in_mouth)
+                    continue;   // не рисуем пиксели в рту
             }
+
+            fb_put_pixel(cx + dx, cy + dy, VGA_COL_YELLOW);
         }
     }
-}
-
-static inline clear_cell(int game_x, int game_y)
-{
-    int px0 = game_x * TILE_W;
-    int py0 = game_y * TILE_H;
-    int px1 = px0 + TILE_W - 1;
-    int py1 = py0 + TILE_H - 1;
-    fb_rectfill(px0, py0, px1, py1, VGA_COL_BLACK);
-}
-
-static inline dot_cell(int game_x, int game_y, int raduis)
-{
-    clear_cell(game_x, game_y);
-
-    int px0 = game_x * TILE_W;
-    int py0 = game_y * TILE_H;
-    int px1 = px0 + TILE_W - 1;
-    int py1 = py0 + TILE_H - 1;
-    fb_dot(px0 + TILE_W/2, py0 + TILE_H/2, VGA_COL_WHITE, raduis);
-}
-
-static inline wall_cell(int game_x, int game_y, uint8_t color)
-{
-    int px0 = game_x * TILE_W;
-    int py0 = game_y * TILE_H;
-    int px1 = px0 + TILE_W - 1;
-    int py1 = py0 + TILE_H - 1;
-    fb_rectfill(px0, py0, px1, py1, color);
 }
 
 static void DrawWindow()
@@ -360,35 +421,46 @@ static void DrawWindow()
 
 void MovePacman(Direction direction)
 {
+    int old_x = pacman.pos_x;
+    int old_y = pacman.pos_y;
+
+    int new_x = old_x;
+    int new_y = old_y;
+
     switch(direction) {
-        case left: // right-->left
-            if (game_window[pacman.pos_y][pacman.pos_x-1] != 1) {
-                pacman.last_pos_x = pacman.pos_x;
-                pacman.pos_x--;
+        case left:
+            if (game_window[old_y][old_x - 1] != 1) {
+                new_x--;
             }
             break;
-        case right: // left-->right
-            if (game_window[pacman.pos_y][pacman.pos_x+1] != 1) {
-                pacman.last_pos_x = pacman.pos_x;
-                pacman.pos_x++;
+        case right:
+            if (game_window[old_y][old_x + 1] != 1) {
+                new_x++;
             }
             break;
-        case up: // down-->up
-            if (game_window[pacman.pos_y-1][pacman.pos_x] != 1) {
-                pacman.last_pos_y = pacman.pos_y;
-                pacman.pos_y--;
+        case up:
+            if (game_window[old_y - 1][old_x] != 1) {
+                new_y--;
             }
             break;
-        case down: // up-->down
-            if (game_window[pacman.pos_y+1][pacman.pos_x] != 1) {
-                pacman.last_pos_y = pacman.pos_y;
-                pacman.pos_y++;
+        case down:
+            if (game_window[old_y + 1][old_x] != 1) {
+                new_y++;
             }
             break;
         default:
             log_err("pacman-kbd", "MOVE PACMAN, DEFAULT direction=%d", direction);
-        break;
+            break;
     }
+
+    // обновляем last_* ТОЛЬКО если реально сдвинулись
+    if (new_x != old_x || new_y != old_y) {
+        pacman.last_pos_x = old_x;
+        pacman.last_pos_y = old_y;
+        pacman.pos_x      = new_x;
+        pacman.pos_y      = new_y;
+    }
+
     DrawWindow();
 }
 
@@ -468,14 +540,6 @@ void MoveGhost(struct Actor* ghost)
     }
 }
 
-bool its_time = false;
-
-void Wait()
-{
-    while(false == its_time);
-    its_time = false;
-}
-
 bool has_rdrand() {
     uint32_t eax, ecx;
     __asm__ volatile ("cpuid" : "=a" (eax), "=c" (ecx) : "a" (1));
@@ -534,10 +598,9 @@ Direction RandomDirection()
 
 void MainLoop()
 {
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 100; i++) {
         log_debug("PACMAN", "Ok, we are in the main loop");
         DrawWindow();
-        //MoveGhost(&ghost5);
         Wait();
     }
 }
@@ -550,6 +613,7 @@ void irq0_handler_timer(Registers* regs)
         //log_warn(MODULE, "Unhandled HUI IRQ %d...", 0);
         tick = 0;
         its_time = true;
+        g_tick++;
     }
 }
 
