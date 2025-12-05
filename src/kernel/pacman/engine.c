@@ -40,6 +40,9 @@ enum VGA_COLOR {
 #define FB_WIDTH   640
 #define FB_HEIGHT  480
 
+#define PACMAN_SYMBOL 'C'
+#define GHOST_SYMBOL 'G'
+
 static uint8_t g_framebuffer[FB_WIDTH * FB_HEIGHT];
 
 static inline void fb_put_pixel(int x, int y, uint8_t color)
@@ -102,9 +105,9 @@ static void fb_clear(uint8_t color)
             fb_put_pixel(x, y, color);
 }
 
-static inline void fb_dot(int cx, int cy, uint8_t color)
+static inline void fb_dot(int cx, int cy, uint8_t color, int radius)
 {
-    const int r  = 3;          // радиус "жирной" точки
+    const int r  = radius;          // радиус "жирной" точки
     const int r2 = r * r;      // r^2, чтобы не считать sqrt
 
     for (int dy = -r; dy <= r; ++dy) {
@@ -201,7 +204,6 @@ struct Actor {
     int last_pos_y;
     int last_pos_x;
     uint8_t color;
-    unsigned char symbol;
 } ghost5, ghost6, ghost7, ghost8, pacman;
 
 int initial_landscape[NUM_ROWS][NUM_COLS] = {
@@ -252,78 +254,106 @@ Direction RandomDirection();
 
 static int support_rdrand = false;
 
-void DrawActor(struct Actor ghost)
+void DrawGhost(struct Actor ghost)
 {
     // TODO: check collisions
-    VGA_putchr(ghost.pos_x, ghost.pos_y, ghost.symbol);
-    VGA_putcolor(ghost.pos_x, ghost.pos_y, ghost.color);
+    //VGA_putchr(ghost.pos_x, ghost.pos_y, ghost.symbol);
+    //VGA_putcolor(ghost.pos_x, ghost.pos_y, ghost.color);
+
+    int px0 = ghost.pos_x * TILE_W;
+    int py0 = ghost.pos_y * TILE_H;
+    int px1 = px0 + TILE_W - 1;
+    int py1 = py0 + TILE_H - 1;
+
+    fb_rectfill(px0, py0, px1, py1, VGA_COL_BLACK);
+
+    int cx = px0 + TILE_W / 2;
+    int cy = py0 + TILE_H / 2;
+    int r  = (TILE_W < TILE_H ? TILE_W : TILE_H) / 3;
+    int r2 = r * r;
+
+    for (int dy = -r; dy <= r; ++dy) {
+        for (int dx = -r; dx <= r; ++dx) {
+            if (dx*dx + dy*dy <= r2) {
+                fb_put_pixel(cx + dx, cy + dy, ghost.color);
+            }
+        }
+    }
 }
 
-void DrawWindow()
+void DrawPacman(struct Actor pacman)
+{
+    int px0 = pacman.pos_x * TILE_W;
+    int py0 = pacman.pos_y * TILE_H;
+    int px1 = px0 + TILE_W - 1;
+    int py1 = py0 + TILE_H - 1;
+
+    fb_rectfill(px0, py0, px1, py1, VGA_COL_BLACK);
+
+    int cx = px0 + TILE_W / 2;
+    int cy = py0 + TILE_H / 2;
+    int r  = (TILE_W < TILE_H ? TILE_W : TILE_H) / 3;  // Пакман покрупнее, чем обычная точка
+    int r2 = r * r;
+
+    for (int dy = -r; dy <= r; ++dy) {
+        for (int dx = -r; dx <= r; ++dx) {
+            if (dx*dx + dy*dy <= r2) {
+                fb_put_pixel(cx + dx, cy + dy, VGA_COL_YELLOW);
+            }
+        }
+    }
+}
+
+static inline clear_cell(int game_x, int game_y)
+{
+    int px0 = game_x * TILE_W;
+    int py0 = game_y * TILE_H;
+    int px1 = px0 + TILE_W - 1;
+    int py1 = py0 + TILE_H - 1;
+    fb_rectfill(px0, py0, px1, py1, VGA_COL_BLACK);
+}
+
+static inline dot_cell(int game_x, int game_y, int raduis)
+{
+    clear_cell(game_x, game_y);
+
+    int px0 = game_x * TILE_W;
+    int py0 = game_y * TILE_H;
+    int px1 = px0 + TILE_W - 1;
+    int py1 = py0 + TILE_H - 1;
+    fb_dot(px0 + TILE_W/2, py0 + TILE_H/2, VGA_COL_WHITE, raduis);
+}
+
+static inline wall_cell(int game_x, int game_y, uint8_t color)
+{
+    int px0 = game_x * TILE_W;
+    int py0 = game_y * TILE_H;
+    int px1 = px0 + TILE_W - 1;
+    int py1 = py0 + TILE_H - 1;
+    fb_rectfill(px0, py0, px1, py1, color);
+}
+
+static void DrawWindow()
 {
     //log_vfprintf(VFS_FD_STDOUT, fmt, args);
     for (int y = 0; y < NUM_ROWS; y++) {
         for (int x = 0; x < NUM_COLS; x++) {
-            switch ( game_window[y][x] ) {
-            case 0: VGA_putchr(x, y, ' '); VGA_putcolor(x, y, VGA_COL_BLACK); break; // black path
-            case 1: VGA_putchr(x, y, ' '); VGA_putcolor(x, y, VGA_COL_WHITE); break; // white wall
-            case 2: VGA_putchr(x, y, '.'); break;
-            case 3: VGA_putchr(x, y, '*'); break;
-            case 4: VGA_putchr(x, y, ' '); VGA_putcolor(x, y, VGA_COL_GREEN); break; // grean exit
-            default: VGA_putchr(x, y, ' '); VGA_putcolor(x, y, VGA_COL_BLACK); break;
+            switch (game_window[y][x]){
+            case 0: clear_cell(x, y); break; // empty road
+            case 1: wall_cell(x, y, VGA_COL_BLUE); break; // wall
+            case 2: dot_cell(x, y, 1); break; // small dot
+            case 3: dot_cell(x, y, 3); break; // big dot
+            case 4: wall_cell(x, y, VGA_COL_GREEN); break; // ghost gate
+            default: clear_cell(x, y); break;
             }
         }
     }
-    DrawActor(ghost5);
-    //DrawActor(ghost6);
-    //DrawActor(ghost7);
-    //DrawActor(ghost8);
-    DrawActor(pacman);
-}
 
-static void draw_landscape_background(void)
-{
-    for (int y = 0; y < NUM_ROWS; ++y)
-    for (int x = 0; x < NUM_COLS; ++x)
-    {
-        int tile = initial_landscape[y][x];
-
-        int px0 = x * TILE_W;
-        int py0 = y * TILE_H;
-        int px1 = px0 + TILE_W - 1;
-        int py1 = py0 + TILE_H - 1;
-
-        switch (tile)
-        {
-        case 1: // wall
-            fb_rectfill(px0, py0, px1, py1, 1);
-            break;
-
-        case 0: // empty road
-            fb_rectfill(px0, py0, px1, py1, 0);
-            break;
-
-        case 2: // small dot
-            fb_rectfill(px0, py0, px1, py1, 0);
-            fb_dot(px0 + TILE_W/2, py0 + TILE_H/2, 15);
-            break;
-
-        case 3: // big dot
-            fb_rectfill(px0, py0, px1, py1, 0);
-            fb_circle(px0 + TILE_W/2, py0 + TILE_H/2, (TILE_W < TILE_H ? TILE_W : TILE_H)/4, 15);
-            break;
-
-        case 4: // ghost gate
-            fb_rectfill(px0, py0, px1, py1, VGA_COL_GREEN);
-            break;
-
-        case 5: case 6: case 7: case 8: // ghosts spawn
-        case 9:                             // pacman spawn
-            fb_rectfill(px0, py0, px1, py1, 0);
-            break;
-        }
-    }
-
+    DrawGhost(ghost5);
+    //DrawGhost(ghost6);
+    //DrawGhost(ghost7);
+    //DrawGhost(ghost8);
+    DrawPacman(pacman);
     vga_blit_framebuffer_12h();
 }
 
@@ -504,11 +534,9 @@ Direction RandomDirection()
 
 void MainLoop()
 {
-    draw_landscape_background();
-
     for (int i = 0; i < 3; i++) {
         log_debug("PACMAN", "Ok, we are in the main loop");
-        //DrawWindow();
+        DrawWindow();
         //MoveGhost(&ghost5);
         Wait();
     }
@@ -588,11 +616,11 @@ void Initialize()
     for (int y = 0; y < NUM_ROWS; y++) {
         for (int x = 0; x < NUM_COLS; x++) {
             switch ( initial_landscape[y][x] ) {
-            case 5: ghost5.pos_y = y; ghost5.last_pos_y = y; ghost5.pos_x = x; ghost5.last_pos_x = x; ghost5.color = VGA_COL_RED; ghost5.symbol = 'G'; break;
-            case 6: ghost6.pos_y = y; ghost6.last_pos_y = y; ghost6.pos_x = x; ghost6.last_pos_x = x; ghost6.color = VGA_COL_CYAN; ghost6.symbol = 'G'; break;
-            case 7: ghost7.pos_y = y; ghost7.last_pos_y = y; ghost7.pos_x = x; ghost7.last_pos_x = x; ghost7.color = VGA_COL_MAGENTA; ghost7.symbol = 'G'; break;
-            case 8: ghost8.pos_y = y; ghost8.last_pos_y = y; ghost8.pos_x = x; ghost8.last_pos_x = x; ghost8.color = VGA_COL_YELLOW; ghost8.symbol = 'G'; break;
-            case 9: pacman.pos_y = y; pacman.last_pos_y = y; pacman.pos_x = x; pacman.last_pos_x = x; pacman.color = VGA_COL_YELLOW; pacman.symbol = 'C'; break;
+            case 5: ghost5.pos_y = y; ghost5.last_pos_y = y; ghost5.pos_x = x; ghost5.last_pos_x = x; ghost5.color = VGA_COL_RED; break;
+            case 6: ghost6.pos_y = y; ghost6.last_pos_y = y; ghost6.pos_x = x; ghost6.last_pos_x = x; ghost6.color = VGA_COL_CYAN; break;
+            case 7: ghost7.pos_y = y; ghost7.last_pos_y = y; ghost7.pos_x = x; ghost7.last_pos_x = x; ghost7.color = VGA_COL_MAGENTA; break;
+            case 8: ghost8.pos_y = y; ghost8.last_pos_y = y; ghost8.pos_x = x; ghost8.last_pos_x = x; ghost8.color = VGA_COL_YELLOW; break;
+            case 9: pacman.pos_y = y; pacman.last_pos_y = y; pacman.pos_x = x; pacman.last_pos_x = x; pacman.color = VGA_COL_YELLOW; break;
             default: game_window[y][x] = initial_landscape[y][x];
             }
         }
