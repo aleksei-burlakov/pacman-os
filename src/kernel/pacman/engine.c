@@ -26,8 +26,12 @@ enum VGA_COLOR {
     VGA_COL_WHITE        = 0xF,
 };
 
+#define HEADER_TILES   2  // top pane
+#define FOOTER_TILES   2  // bottome pane
+#define TOP_OFFSET     HEADER_TILES
+
 #define TILE_W     (FB_WIDTH  / NUM_COLS)   // 640 / 28
-#define TILE_H     (FB_HEIGHT / NUM_ROWS)   // 480 / 29
+#define TILE_H     (FB_HEIGHT / (HEADER_TILES + NUM_ROWS + FOOTER_TILES)) // 480px / (2+29+2)
 
 // BEGIN: copied from i8259.c
 #define PIC1_COMMAND_PORT           0x20
@@ -40,8 +44,7 @@ enum VGA_COLOR {
 #define FB_WIDTH   640
 #define FB_HEIGHT  480
 
-#define PACMAN_SYMBOL 'C'
-#define GHOST_SYMBOL 'G'
+
 
 static uint8_t g_framebuffer[FB_WIDTH * FB_HEIGHT];
 
@@ -257,7 +260,7 @@ static int support_rdrand = false;
 static inline void clear_cell(int game_x, int game_y)
 {
     int px0 = game_x * TILE_W;
-    int py0 = game_y * TILE_H;
+    int py0 = (game_y + TOP_OFFSET) * TILE_H;
     int px1 = px0 + TILE_W - 1;
     int py1 = py0 + TILE_H - 1;
     fb_rectfill(px0, py0, px1, py1, VGA_COL_BLACK);
@@ -268,7 +271,7 @@ static inline void dot_cell(int game_x, int game_y, int raduis)
     clear_cell(game_x, game_y);
 
     int px0 = game_x * TILE_W;
-    int py0 = game_y * TILE_H;
+    int py0 = (game_y + TOP_OFFSET) * TILE_H;
     int px1 = px0 + TILE_W - 1;
     int py1 = py0 + TILE_H - 1;
     fb_dot(px0 + TILE_W/2, py0 + TILE_H/2, VGA_COL_WHITE, raduis);
@@ -277,7 +280,7 @@ static inline void dot_cell(int game_x, int game_y, int raduis)
 static inline void wall_cell(int game_x, int game_y, uint8_t color)
 {
     int px0 = game_x * TILE_W;
-    int py0 = game_y * TILE_H;
+    int py0 = (game_y + TOP_OFFSET) * TILE_H;
     int px1 = px0 + TILE_W - 1;
     int py1 = py0 + TILE_H - 1;
     fb_rectfill(px0, py0, px1, py1, color);
@@ -290,7 +293,7 @@ void DrawGhost(struct Actor ghost)
     //VGA_putcolor(ghost.pos_x, ghost.pos_y, ghost.color);
 
     int px0 = ghost.pos_x * TILE_W;
-    int py0 = ghost.pos_y * TILE_H;
+    int py0 = (ghost.pos_y + TOP_OFFSET) * TILE_H;
     int px1 = px0 + TILE_W - 1;
     int py1 = py0 + TILE_H - 1;
 
@@ -326,7 +329,7 @@ void DrawPacman(struct Actor pacman)
 
     // 2. Get the vga tile coordinates based on the game position
     int px0 = pacman.pos_x * TILE_W;
-    int py0 = pacman.pos_y * TILE_H;
+    int py0 = (pacman.pos_y + TOP_OFFSET) * TILE_H;
     int px1 = px0 + TILE_W - 1;
     int py1 = py0 + TILE_H - 1;
 
