@@ -15,6 +15,15 @@
 #define TILE_W     (FB_WIDTH  / NUM_COLS)   // 640 / 28
 #define TILE_H     (FB_HEIGHT / (HEADER_TILES + NUM_ROWS + FOOTER_TILES)) // 480px / (2+29+2)
 
+#define FONT_EXTRA_WORDS 4
+
+#define FONT_WIDTH      7
+#define FONT_HEIGHT     14
+#define FONTDATAMAX     (256 * FONT_HEIGHT) // = 3584
+
+
+extern const uint8_t fontdata_7x14[FONTDATAMAX];
+
 // Стандартная 16-цветная палитра VGA (подойдёт и для 12h)
 enum VGA_COLOR {
     VGA_COL_BLACK        = 0x0,
@@ -49,6 +58,5 @@ void fb_line(int x0, int y0, int x1, int y1, uint8_t color);
 // Можно оставить, если нужен
 void vga_blit_framebuffer_12h(void);
 
-// Текст (если уже есть fb_draw_char)
-void fb_draw_char(int x, int y, char c, uint8_t color);
-void fb_draw_text(int x, int y, const char* s, uint8_t color);
+// Текст
+void draw_text(int tile_x, int tile_y, const char* s, uint8_t color);

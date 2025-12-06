@@ -54,11 +54,9 @@ void Wait()
 
 static void DrawWindow()
 {
-    DrawTopPanel();
     DrawGamefield();
-    
+    InitializeTopPanel();
 }
-
 
 void MovePacman(Direction direction)
 {
@@ -232,11 +230,6 @@ Direction RandomDirection()
     return (int)rnd % 4;
 }
 
-
-#define VGA_ADDRESS ((volatile uint8_t*) 0xA0000)
-#define SCREEN_WIDTH 640
-#define SCREEN_HEIGHT 480
-
 void MainLoop()
 {
     for (int i = 0; i < 100; i++) {
@@ -305,7 +298,7 @@ void irq1_handler_keyboard(Registers* regs)
     i686_iowait(); // optional
 }
 
-void Initialize()
+void InitializeEngine()
 {
     // 1. Setup the timer
     i686_IRQ_RegisterHandler(0, irq0_handler_timer);
@@ -334,6 +327,7 @@ void Initialize()
 
 void StartGame()
 {
-    Initialize();
+    InitializeEngine();
+    InitializeTopPanel();
     MainLoop();
 }
