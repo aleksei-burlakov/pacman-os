@@ -159,6 +159,8 @@ static void vga_draw_char_7x14_px(int px, int py, char c, uint8_t color)
     uint8_t ch = (uint8_t)c;
     const uint8_t *glyph = &fontdata_7x14[ch * FONT_HEIGHT];
 
+    fb_rectfill(px, py, px + TILE_W, py + TILE_H, VGA_COL_BLACK);
+
     for (int row = 0; row < FONT_HEIGHT; row++) {
         uint8_t bits = glyph[row];   // одна строка = 1 байт
 
@@ -181,11 +183,12 @@ void draw_text(int tile_x, int tile_y, const char* s, uint8_t color)
     // по Y — ВНУТРИ своей панели, без TOP_OFFSET
     int py = tile_y * TILE_H + (TILE_H - FONT_HEIGHT) / 2;
 
-    const int CHAR_SPACING = 2;  // 2 пикселя между символами
+    // 4 пикселя слева и 4 справа. В итоге 2 символа на тайл
+    const int CHAR_SPACING = 4;
 
     while (*s) {
-        vga_draw_char_7x14_px(px, py, *s, color);
-        px += FONT_WIDTH + CHAR_SPACING;
+        vga_draw_char_7x14_px(CHAR_SPACING /*слева*/ + px, py, *s, color); // then draw the symbol
+        px += FONT_WIDTH + /*справа*/ CHAR_SPACING;
         s++;
     }
 }

@@ -45,6 +45,7 @@ static int support_rdrand = false;
 
 static volatile bool its_time = false;
 uint32_t g_tick = 0;
+uint32_t g_score = 0;
 
 void Wait()
 {
@@ -55,7 +56,7 @@ void Wait()
 static void DrawWindow()
 {
     DrawGamefield();
-    InitializeTopPanel();
+    
 }
 
 void MovePacman(Direction direction)
@@ -98,6 +99,12 @@ void MovePacman(Direction direction)
         pacman.last_pos_y = old_y;
         pacman.pos_x      = new_x;
         pacman.pos_y      = new_y;
+
+        if(game_window[pacman.pos_y][pacman.pos_x] == 2) {
+            game_window[pacman.pos_y][pacman.pos_x] = 0; // the dot is eaten
+            g_score++;
+            Score1UP(g_score); // STOPPED HERE: dot +10, big dot +50 
+        }
     }
 
     DrawWindow();
