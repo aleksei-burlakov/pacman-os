@@ -101,9 +101,14 @@ void MovePacman(Direction direction)
         pacman.pos_y      = new_y;
 
         if(game_window[pacman.pos_y][pacman.pos_x] == 2) {
-            game_window[pacman.pos_y][pacman.pos_x] = 0; // the dot is eaten
-            g_score++;
-            Score1UP(g_score); // STOPPED HERE: dot +10, big dot +50 
+            game_window[pacman.pos_y][pacman.pos_x] = 0; // eat small dot
+            g_score += 10;
+            Score1UP(g_score);
+        }
+        if(game_window[pacman.pos_y][pacman.pos_x] == 3) {
+            game_window[pacman.pos_y][pacman.pos_x] = 0; // eat big dot
+            g_score += 50;
+            Score1UP(g_score);
         }
     }
 

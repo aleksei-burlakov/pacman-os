@@ -6,6 +6,8 @@ static void Update1UP(char* text)
     draw_text(2, 1, text, VGA_COL_WHITE);
 }
 
+uint32_t g_high_score = 0;
+
 static void UpdateHighScore(char* text)
 {
     draw_text(12, 0, "HIGH SCORE", VGA_COL_YELLOW);
@@ -14,19 +16,16 @@ static void UpdateHighScore(char* text)
 
 void Score1UP(int score)
 {
-    // STOPPED HERE: Implement itoa
-    switch(score) {
-    case 1: Update1UP("1"); break;
-    case 2: Update1UP("2"); break;
-    case 3: Update1UP("3"); break;
-    case 4: Update1UP("4"); break;
-    case 5: Update1UP("5"); break;
-    case 6: Update1UP("6"); break;
-    case 7: Update1UP("7"); break;
-    case 8: Update1UP("8"); break;
-    case 9: Update1UP("9"); break;
-    case 10: Update1UP("10"); break;
-    default: Update1UP("INFINITY"); break;
+    // Simple clamping (optional, but avoids negative weirdness)
+    if (score < 0) score = 0;
+
+    char buf[12];  // enough for 32-bit decimal + '\0'
+    u32_to_str_dec((uint32_t)score, buf);
+    Update1UP(buf);
+
+    if(g_high_score < score) {
+        g_high_score = score;
+        UpdateHighScore(buf);
     }
 }
 
@@ -38,6 +37,7 @@ void Reset1UP()
 void InitializeTopPanel()
 {
     draw_text(1, 0, "1 UP", VGA_COL_YELLOW);
+    //fb_rectfill(0, 0, FB_WIDTH-1, TOP_OFFSET * TILE_H - 1, VGA_COL_BLACK);
     Reset1UP();
     UpdateHighScore("00");
     //draw_text(2, 0, "HIGH SCORE  10000", VGA_COL_YELLOW);
