@@ -15,4 +15,5 @@ extern struct Actor {
     uint8_t color;
 } ghost5, ghost6, ghost7, ghost8, pacman;
 
+void DrawCherry(int game_x, int game_y);
 void DrawGamefield();

@@ -1,4 +1,5 @@
 #include "gamefield.h"
+#include "landscape.h"
 #include "utils.h"
 #include <stdbool.h>
 
@@ -133,17 +134,75 @@ void DrawPacman(struct Actor pacman)
     }
 }
 
+void DrawCherry(int game_x, int game_y)
+{
+    // 1. Clear the tile first
+    clear_cell(game_x, game_y);
+
+    // 2. Tile → pixel coordinates
+    int px0 = game_x * TILE_W;
+    int py0 = (game_y + TOP_OFFSET) * TILE_H;
+    int px1 = px0 + TILE_W - 1;
+    int py1 = py0 + TILE_H - 1;
+
+    // 3. Basic geometry for the two fruits
+    int tile_w = px1 - px0 + 1;
+    int tile_h = py1 - py0 + 1;
+
+    int radius = (tile_w < tile_h ? tile_w : tile_h) / 5;   // small-ish circles
+    if (radius < 2) radius = 2;
+
+    // Cherry centers (left & right)
+    int cx_left  = px0 + tile_w / 3;
+    int cx_right = px0 + (2 * tile_w) / 3;
+    int cy       = py0 + (2 * tile_h) / 3;
+
+    int r2 = radius * radius;
+
+    // 4. Draw the two filled circles (the cherries)
+    for (int dy = -radius; dy <= radius; ++dy) {
+        for (int dx = -radius; dx <= radius; ++dx) {
+            if (dx*dx + dy*dy <= r2) {
+                fb_put_pixel(cx_left  + dx, cy + dy, VGA_COL_RED);
+                fb_put_pixel(cx_right + dx, cy + dy, VGA_COL_RED);
+            }
+        }
+    }
+
+    // 5. Draw stems (simple green lines up from each cherry)
+    int stem_height = radius * 2;
+    int stem_top_y  = cy - stem_height;
+
+    if (stem_top_y < py0) stem_top_y = py0;
+
+    // Left stem
+    for (int y = cy - radius; y >= stem_top_y; --y) {
+        fb_put_pixel(cx_left, y, VGA_COL_GREEN);
+    }
+
+    // Right stem
+    for (int y = cy - radius; y >= stem_top_y; --y) {
+        fb_put_pixel(cx_right, y, VGA_COL_GREEN);
+    }
+
+    // 6. Optional: a little connector between stems near the top
+    for (int x = cx_left; x <= cx_right; ++x) {
+        fb_put_pixel(x, stem_top_y, VGA_COL_GREEN);
+    }
+}
+
 void DrawGamefield()
 {
     //log_vfprintf(VFS_FD_STDOUT, fmt, args);
     for (int y = 0; y < NUM_ROWS; y++) {
         for (int x = 0; x < NUM_COLS; x++) {
             switch (game_window[y][x]){
-            case 0: clear_cell(x, y); break; // empty road
-            case 1: wall_cell(x, y, VGA_COL_BLUE); break; // wall
-            case 2: dot_cell(x, y, 1); break; // small dot
-            case 3: dot_cell(x, y, 3); break; // big dot
-            case 4: wall_cell(x, y, VGA_COL_GREEN); break; // ghost gate
+            case TILE_EMPTY: clear_cell(x, y); break; // empty road
+            case TILE_WALL: wall_cell(x, y, VGA_COL_BLUE); break; // wall
+            case TILE_DOT_SMALL: dot_cell(x, y, 1); break; // small dot
+            case TILE_DOT_BIG: dot_cell(x, y, 3); break; // big dot
+            case TILE_GATE: wall_cell(x, y, VGA_COL_GREEN); break; // ghost gate
+            case TILE_CHERRY: DrawCherry(x, y); break; // cherry
             default: clear_cell(x, y); break;
             }
         }

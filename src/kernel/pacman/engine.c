@@ -47,6 +47,9 @@ static volatile bool its_time = false;
 uint32_t g_tick = 0;
 uint32_t g_score = 0;
 
+static bool g_cherry_present = false;
+uint32_t g_dots_eaten = 0;
+
 void Wait()
 {
     while(false == its_time);
@@ -56,7 +59,6 @@ void Wait()
 static void DrawWindow()
 {
     DrawGamefield();
-    
 }
 
 void MovePacman(Direction direction)
@@ -100,15 +102,37 @@ void MovePacman(Direction direction)
         pacman.pos_x      = new_x;
         pacman.pos_y      = new_y;
 
-        if(game_window[pacman.pos_y][pacman.pos_x] == 2) {
-            game_window[pacman.pos_y][pacman.pos_x] = 0; // eat small dot
+        if(game_window[pacman.pos_y][pacman.pos_x] == TILE_DOT_SMALL) {
+            game_window[pacman.pos_y][pacman.pos_x] = TILE_EMPTY; // eat small dot
             g_score += 10;
             Score1UP(g_score);
+            g_dots_eaten++;
         }
-        if(game_window[pacman.pos_y][pacman.pos_x] == 3) {
-            game_window[pacman.pos_y][pacman.pos_x] = 0; // eat big dot
+        if(game_window[pacman.pos_y][pacman.pos_x] == TILE_DOT_BIG) {
+            game_window[pacman.pos_y][pacman.pos_x] = TILE_EMPTY; // eat big dot
             g_score += 50;
             Score1UP(g_score);
+            g_dots_eaten++;
+        }
+        if(game_window[pacman.pos_y][pacman.pos_x] == TILE_CHERRY) {
+            game_window[pacman.pos_y][pacman.pos_x] = TILE_EMPTY; // eat big dot
+            g_score += 100;
+            Score1UP(g_score);
+            g_dots_eaten++;
+            g_cherry_present = false;
+        }
+
+        // Spawn first cherry when 70 dots eaten (original Pac-Man rule)
+        if (!g_cherry_present && g_dots_eaten == 70) {
+            // Place cherry tile in the maze
+            game_window[CHERRY_SPAWN_Y][CHERRY_SPAWN_X] = TILE_CHERRY;
+            g_cherry_present = true;
+        }
+
+        if (!g_cherry_present && g_dots_eaten == 170) {
+            // Place cherry tile in the maze
+            game_window[CHERRY_SPAWN_Y][CHERRY_SPAWN_X] = TILE_CHERRY;
+            g_cherry_present = true;
         }
     }
 
